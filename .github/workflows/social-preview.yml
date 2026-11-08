@@ -1,0 +1,39 @@
+name: Generate social preview PNGs
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'og-home.svg'
+      - 'og-sabriya.svg'
+      - '.github/workflows/social-preview.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install SVG renderer
+        run: pip install cairosvg
+      - name: Render social images
+        run: |
+          python - <<'PY'
+          import cairosvg
+          for name in ('og-home', 'og-sabriya'):
+              cairosvg.svg2png(url=f'{name}.svg', write_to=f'{name}.png', output_width=1200, output_height=630)
+          PY
+      - name: Commit generated PNG images
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add og-home.png og-sabriya.png
+          if ! git diff --cached --quiet; then
+            git commit -m "Generate PNG social previews"
+            git push
+          fi
