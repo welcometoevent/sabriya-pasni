@@ -23,11 +23,41 @@
 const RSVP_ENDPOINT = "https://script.google.com/macros/s/AKfycbygg_c_cM7XCCLtmPIbuXFDTG2nWzQKPDFazFuuVvzexZ4xG2euESqH0T_kOTyF7_et/exec";
 const form=document.getElementById("rsvpForm"),partyField=document.getElementById("partyField"),partySize=document.getElementById("partySize"),status=document.getElementById("status"),submitBtn=document.getElementById("submitBtn");
 form.addEventListener("change",()=>{const yes=form.elements.attending.value==="yes";partyField.hidden=!yes;partySize.required=yes});
-form.addEventListener("submit",async e=>{e.preventDefault();status.className="status";status.textContent="";if(!form.reportValidity())return;
-if(!RSVP_ENDPOINT){status.className="status error";status.textContent="RSVP submissions are not open yet. Please check back soon.";return}
-const attending=form.elements.attending.value==="yes";const payload={name:form.elements.name.value.trim(),attending:attending?"Yes":"No",guests:attending?Number(partySize.value):0,event:"sabriya-pasni"};
-if(!payload.name||attending&&(!Number.isInteger(payload.guests)||payload.partySize<1||payload.guests>20)){status.className="status error";status.textContent="Please check your name and party size.";return}
-submitBtn.disabled=true;submitBtn.textContent="Sending…";
-try{await fetch(RSVP_ENDPOINT,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});status.className="status success";status.textContent="Your RSVP was sent. Please contact the hosts if you need to confirm or change your response.";form.reset();partyField.hidden=true;partySize.required=false}catch(err){status.className="status error";status.textContent="We couldn't confirm your RSVP. Please try again later."}finally{submitBtn.disabled=false;submitBtn.textContent="Send RSVP"}});
+// Each browser gets a stable, unguessable edit token; the link can be copied to another device.
+const params=new URLSearchParams(location.search);
+const editKey="sabriya-pasni-edit-token";
+let editToken=params.get("edit")||localStorage.getItem(editKey);
+if(!editToken||!/^[-_a-zA-Z0-9]{20,100}$/.test(editToken)){editToken=Array.from(crypto.getRandomValues(new Uint8Array(24)),v=>v.toString(16).padStart(2,"0")).join("");}
+localStorage.setItem(editKey,editToken);
+const editInfo=document.createElement("p");editInfo.className="fine";editInfo.textContent="Submitting again from this browser updates your RSVP. After submitting, save your personal edit link to make changes from another device.";
+form.appendChild(editInfo);
+const editLink=document.createElement("div");editLink.className="status success";editLink.style.display="none";form.appendChild(editLink);
+const transport=document.createElement("iframe");transport.name="rsvpTransport";transport.hidden=true;document.body.appendChild(transport);
+let pending=null;
+window.addEventListener("message",e=>{
+ if(!pending||!e.data||e.data.type!=="welcome-rsvp-result"||e.data.requestId!==pending.id)return;
+ if(!/(^|\\.)googleusercontent\\.com$|(^|\\.)google\\.com$/.test(new URL(e.origin).hostname))return;
+ clearTimeout(pending.timeout);pending=null;submitBtn.disabled=false;submitBtn.textContent="Send RSVP";
+ if(e.data.success){
+  status.className="status success";status.textContent=e.data.message;
+  const link=new URL(location.href);link.searchParams.set("edit",editToken);link.hash="rsvp";
+  editLink.style.display="block";editLink.replaceChildren(document.createTextNode("Your private edit link: "));
+  const a=document.createElement("a");a.href=link.href;a.textContent="Copy or bookmark this link";a.addEventListener("click",ev=>{ev.preventDefault();navigator.clipboard?.writeText(link.href).then(()=>{a.textContent="Edit link copied!";}).catch(()=>{prompt("Copy your edit link:",link.href);});});editLink.appendChild(a);
+ }else{status.className="status error";status.textContent=e.data.message||"RSVP could not be saved.";}
+});
+form.addEventListener("submit",e=>{
+ e.preventDefault();status.className="status";status.textContent="";
+ if(!form.reportValidity()||pending)return;
+ const attending=form.elements.attending.value==="yes";
+ const payload={name:form.elements.name.value.trim(),attending:attending?"Yes":"No",guests:attending?Number(partySize.value):0,token:editToken,event:"sabriya-pasni",requestId:Array.from(crypto.getRandomValues(new Uint8Array(12)),v=>v.toString(16).padStart(2,"0")).join("")};
+ if(!payload.name||attending&&(!Number.isInteger(payload.guests)||payload.guests<1||payload.guests>20)){status.className="status error";status.textContent="Please check your name and party size.";return;}
+ submitBtn.disabled=true;submitBtn.textContent="Saving RSVP…";
+ const hidden=document.createElement("form");hidden.method="POST";hidden.action=RSVP_ENDPOINT;hidden.target="rsvpTransport";hidden.style.display="none";
+ const field=document.createElement("input");field.name="payload";field.value=JSON.stringify(payload);hidden.appendChild(field);
+ // Apps Script receives form-urlencoded POST; Code.gs reads e.parameter.payload.
+ document.body.appendChild(hidden);
+ pending={id:payload.requestId,timeout:setTimeout(()=>{pending=null;submitBtn.disabled=false;submitBtn.textContent="Send RSVP";status.className="status error";status.textContent="We could not verify your RSVP. Please check the Google Sheet or try again.";},20000)};
+ hidden.submit();setTimeout(()=>hidden.remove(),1000);
+});
 const target=new Date("2026-11-29T18:00:00-05:00").getTime();function tick(){let diff=Math.max(0,target-Date.now());const vals=[Math.floor(diff/86400000),Math.floor(diff/3600000)%24,Math.floor(diff/60000)%60,Math.floor(diff/1000)%60];document.getElementById("countdown").innerHTML=vals.map((v,i)=>'<div><span>'+v+'</span><small>'+["Days","Hours","Minutes","Seconds"][i]+'</small></div>').join("")}tick();setInterval(tick,1000);
 </script></body></html>
