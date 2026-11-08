@@ -5,6 +5,8 @@ on:
     paths:
       - 'og-home.svg'
       - 'og-sabriya.svg'
+      - 'sabriyaspasni/index.html'
+      - 'index.html'
       - '.github/workflows/social-preview.yml'
   workflow_dispatch:
 permissions:
