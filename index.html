@@ -38,7 +38,7 @@ const transport=document.createElement("iframe");transport.name="rsvpTransport";
 let pending=null;
 window.addEventListener("message",e=>{
  if(!pending||!e.data||e.data.type!=="welcome-rsvp-result"||e.data.requestId!==pending.id)return;
- if(!/(^|\\.)googleusercontent\\.com$|(^|\\.)google\\.com$/.test(new URL(e.origin).hostname))return;
+ if(!/(^|\.)googleusercontent\.com$|(^|\.)google\.com$/.test(new URL(e.origin).hostname))return;
  clearTimeout(pending.timeout);pending=null;submitBtn.disabled=false;submitBtn.textContent="Send RSVP";
  if(e.data.success){
   status.className="status success";status.textContent=e.data.message;
