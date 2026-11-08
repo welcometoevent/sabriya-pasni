@@ -29,7 +29,7 @@ function doGet(e){return ContentService.createTextOutput(JSON.stringify({success
 function doPost(e){
  let output={success:false,message:'Unable to save RSVP.'},requestId='';
  try{
-  const data=JSON.parse((e&&e.postData&&e.postData.contents)||'{}');
+  const data=JSON.parse((e&&e.parameter&&e.parameter.payload)||(e&&e.postData&&e.postData.contents)||'{}');
   requestId=String(data.requestId||'').slice(0,100);
   const name=String(data.name||'').trim().replace(/\s+/g,' ').slice(0,120);
   const attending=String(data.attending||'').toLowerCase();
