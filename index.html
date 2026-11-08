@@ -23,13 +23,15 @@
 const RSVP_ENDPOINT = "https://script.google.com/macros/s/AKfycbygg_c_cM7XCCLtmPIbuXFDTG2nWzQKPDFazFuuVvzexZ4xG2euESqH0T_kOTyF7_et/exec";
 const form=document.getElementById("rsvpForm"),partyField=document.getElementById("partyField"),partySize=document.getElementById("partySize"),status=document.getElementById("status"),submitBtn=document.getElementById("submitBtn");
 form.addEventListener("change",()=>{const yes=form.elements.attending.value==="yes";partyField.hidden=!yes;partySize.required=yes});
-// Each browser gets a stable, unguessable edit token; the link can be copied to another device.
+// A new visit creates a new RSVP. Only an explicit private edit link updates an RSVP.
 const params=new URLSearchParams(location.search);
-const editKey="sabriya-pasni-edit-token";
-let editToken=params.get("edit")||localStorage.getItem(editKey);
-if(!editToken||!/^[-_a-zA-Z0-9]{20,100}$/.test(editToken)){editToken=Array.from(crypto.getRandomValues(new Uint8Array(24)),v=>v.toString(16).padStart(2,"0")).join("");}
-localStorage.setItem(editKey,editToken);
-const editInfo=document.createElement("p");editInfo.className="fine";editInfo.textContent="Submitting again from this browser updates your RSVP. After submitting, save your personal edit link to make changes from another device.";
+const existingEditToken=params.get("edit");
+const validToken=t=>/^[-_a-zA-Z0-9]{20,100}$/.test(t||"");
+const newToken=()=>Array.from(crypto.getRandomValues(new Uint8Array(24)),v=>v.toString(16).padStart(2,"0")).join("");
+let editToken=validToken(existingEditToken)?existingEditToken:newToken();
+const editing=validToken(existingEditToken);
+const editInfo=document.createElement("p");editInfo.className="fine";
+editInfo.textContent=editing?"You are updating the RSVP associated with this private link.":"Each submission creates a new RSVP. After submitting, save the private link if you want to edit your response later.";
 form.appendChild(editInfo);
 const editLink=document.createElement("div");editLink.className="status success";editLink.style.display="none";form.appendChild(editLink);
 const transport=document.createElement("iframe");transport.name="rsvpTransport";transport.hidden=true;document.body.appendChild(transport);
@@ -43,6 +45,8 @@ window.addEventListener("message",e=>{
   const link=new URL(location.href);link.searchParams.set("edit",editToken);link.hash="rsvp";
   editLink.style.display="block";editLink.replaceChildren(document.createTextNode("Your private edit link: "));
   const a=document.createElement("a");a.href=link.href;a.textContent="Copy or bookmark this link";a.addEventListener("click",ev=>{ev.preventDefault();navigator.clipboard?.writeText(link.href).then(()=>{a.textContent="Edit link copied!";}).catch(()=>{prompt("Copy your edit link:",link.href);});});editLink.appendChild(a);
+  if(!editing){editToken=newToken();form.reset();partyField.hidden=true;partySize.required=false;}
+
  }else{status.className="status error";status.textContent=e.data.message||"RSVP could not be saved.";}
 });
 form.addEventListener("submit",e=>{
