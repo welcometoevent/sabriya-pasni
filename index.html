@@ -19,49 +19,71 @@
 <section class="rsvp" id="rsvp"><div class="wrap"><p class="eyebrow center">We hope you'll join us</p><h2 class="section-title">Kindly RSVP</h2><p class="lead center">Let us know if you can celebrate with us. We look forward to seeing you!</p><form id="rsvpForm" class="form-card"><div class="field"><label for="guestName">Your name</label><input id="guestName" name="name" type="text" maxlength="120" placeholder="Enter your full name" required autocomplete="name"></div><fieldset class="field"><legend>Will you attend?</legend><div class="choices"><label class="choice"><input type="radio" name="attending" value="yes" required> Joyfully accepts</label><label class="choice"><input type="radio" name="attending" value="no"> Regretfully declines</label></div></fieldset><div class="field" id="partyField" hidden><label for="partySize">Total number attending (including you)</label><input id="partySize" name="partySize" type="number" min="1" max="20" value="1" inputmode="numeric"></div><button class="button" style="width:100%" type="submit" id="submitBtn">Send RSVP</button><div class="status" id="status" role="status" aria-live="polite"></div><p class="fine">No account required. Your response will be shared only with the event organizers.</p></form></div></section>
 </main><footer class="footer"><h2>Made with love for Sabriya ♡</h2><p>November 29, 2026 · Edgewood, Maryland</p><p style="font-size:12px">Powered by WelcomeToEvent</p></footer>
 <script>
-/* Set this to the deployed Google Apps Script Web App URL when the RSVP backend is ready. */
-const RSVP_ENDPOINT = "https://script.google.com/macros/s/AKfycbygg_c_cM7XCCLtmPIbuXFDTG2nWzQKPDFazFuuVvzexZ4xG2euESqH0T_kOTyF7_et/exec";
-const form=document.getElementById("rsvpForm"),partyField=document.getElementById("partyField"),partySize=document.getElementById("partySize"),status=document.getElementById("status"),submitBtn=document.getElementById("submitBtn");
-form.addEventListener("change",()=>{const yes=form.elements.attending.value==="yes";partyField.hidden=!yes;partySize.required=yes});
-// A new visit creates a new RSVP. Only an explicit private edit link updates an RSVP.
-const params=new URLSearchParams(location.search);
-const existingEditToken=params.get("edit");
-const validToken=t=>/^[-_a-zA-Z0-9]{20,100}$/.test(t||"");
-const newToken=()=>Array.from(crypto.getRandomValues(new Uint8Array(24)),v=>v.toString(16).padStart(2,"0")).join("");
-let editToken=validToken(existingEditToken)?existingEditToken:newToken();
-const editing=validToken(existingEditToken);
-const editInfo=document.createElement("p");editInfo.className="fine";
-editInfo.textContent=editing?"You are updating the RSVP associated with this private link.":"Each submission creates a new RSVP. After submitting, save the private link if you want to edit your response later.";
-form.appendChild(editInfo);
-const editLink=document.createElement("div");editLink.className="status success";editLink.style.display="none";form.appendChild(editLink);
-const transport=document.createElement("iframe");transport.name="rsvpTransport";transport.hidden=true;document.body.appendChild(transport);
-let pending=null;
-window.addEventListener("message",e=>{
- if(!pending||!e.data||e.data.type!=="welcome-rsvp-result"||e.data.requestId!==pending.id)return;
- if(!/(^|\.)googleusercontent\.com$|(^|\.)google\.com$/.test(new URL(e.origin).hostname))return;
- clearTimeout(pending.timeout);pending=null;submitBtn.disabled=false;submitBtn.textContent="Send RSVP";
- if(e.data.success){
-  status.className="status success";status.textContent=e.data.message;
-  const link=new URL(location.href);link.searchParams.set("edit",editToken);link.hash="rsvp";
-  editLink.style.display="block";editLink.replaceChildren(document.createTextNode("Your private edit link: "));
-  const a=document.createElement("a");a.href=link.href;a.textContent="Copy or bookmark this link";a.addEventListener("click",ev=>{ev.preventDefault();navigator.clipboard?.writeText(link.href).then(()=>{a.textContent="Edit link copied!";}).catch(()=>{prompt("Copy your edit link:",link.href);});});editLink.appendChild(a);
-  if(!editing){editToken=newToken();form.reset();partyField.hidden=true;partySize.required=false;}
+const SUPABASE_URL = "https://vpspirigruwcgnqlwbla.supabase.co";
+const SUPABASE_KEY = "sb_publishable_O-j4VaGRYGpY8WjwmjMDLA_HWfZ7rns";
+const form = document.getElementById("rsvpForm");
+const partyField = document.getElementById("partyField");
+const partySize = document.getElementById("partySize");
+const status = document.getElementById("status");
+const submitBtn = document.getElementById("submitBtn");
 
- }else{status.className="status error";status.textContent=e.data.message||"RSVP could not be saved.";}
+form.addEventListener("change", () => {
+  const yes = form.elements.attending.value === "yes";
+  partyField.hidden = !yes;
+  partySize.required = yes;
 });
-form.addEventListener("submit",e=>{
- e.preventDefault();status.className="status";status.textContent="";
- if(!form.reportValidity()||pending)return;
- const attending=form.elements.attending.value==="yes";
- const payload={name:form.elements.name.value.trim(),attending:attending?"Yes":"No",guests:attending?Number(partySize.value):0,token:editToken,event:"sabriya-pasni",requestId:Array.from(crypto.getRandomValues(new Uint8Array(12)),v=>v.toString(16).padStart(2,"0")).join("")};
- if(!payload.name||attending&&(!Number.isInteger(payload.guests)||payload.guests<1||payload.guests>20)){status.className="status error";status.textContent="Please check your name and party size.";return;}
- submitBtn.disabled=true;submitBtn.textContent="Saving RSVP…";
- const hidden=document.createElement("form");hidden.method="POST";hidden.action=RSVP_ENDPOINT;hidden.target="rsvpTransport";hidden.style.display="none";
- const field=document.createElement("input");field.name="payload";field.value=JSON.stringify(payload);hidden.appendChild(field);
- // Apps Script receives form-urlencoded POST; Code.gs reads e.parameter.payload.
- document.body.appendChild(hidden);
- pending={id:payload.requestId,timeout:setTimeout(()=>{pending=null;submitBtn.disabled=false;submitBtn.textContent="Send RSVP";status.className="status error";status.textContent="We could not verify your RSVP. Please check the Google Sheet or try again.";},20000)};
- hidden.submit();setTimeout(()=>hidden.remove(),1000);
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (submitBtn.disabled || !form.reportValidity()) return;
+  const name = form.elements.name.value.trim().replace(/\s+/g, " ");
+  const attending = form.elements.attending.value === "yes";
+  const count = attending ? Number(partySize.value) : 0;
+  if (!name || name.length > 120 || (attending && (!Number.isInteger(count) || count < 1 || count > 20))) {
+    status.className = "status error";
+    status.textContent = "Please check your name and number attending.";
+    return;
+  }
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Saving RSVP…";
+  status.className = "status";
+  status.textContent = "";
+  try {
+    const response = await fetch(SUPABASE_URL + "/rest/v1/rpc/submit_rsvp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_KEY
+      },
+      body: JSON.stringify({
+        p_guest_name: name,
+        p_attending: attending,
+        p_guest_count: count
+      })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || "Unable to save your RSVP.");
+    if (typeof result !== "string" || !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(result)) {
+      throw new Error("The server did not confirm the RSVP. Please contact the hosts before trying again.");
+    }
+    status.className = "status success";
+    status.textContent = "Your RSVP has been received! Thank you for responding.";
+    form.reset();
+    partyField.hidden = true;
+    partySize.required = false;
+  } catch (error) {
+    status.className = "status error";
+    status.textContent = error.message || "Unable to confirm your RSVP. Please contact the hosts.";
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Send RSVP";
+  }
 });
-const target=new Date("2026-11-29T18:00:00-05:00").getTime();function tick(){let diff=Math.max(0,target-Date.now());const vals=[Math.floor(diff/86400000),Math.floor(diff/3600000)%24,Math.floor(diff/60000)%60,Math.floor(diff/1000)%60];document.getElementById("countdown").innerHTML=vals.map((v,i)=>'<div><span>'+v+'</span><small>'+["Days","Hours","Minutes","Seconds"][i]+'</small></div>').join("")}tick();setInterval(tick,1000);
+const target = new Date("2026-11-29T18:00:00-05:00").getTime();
+function tick() {
+  const diff = Math.max(0, target - Date.now());
+  const vals = [Math.floor(diff / 86400000), Math.floor(diff / 3600000) % 24, Math.floor(diff / 60000) % 60, Math.floor(diff / 1000) % 60];
+  document.getElementById("countdown").innerHTML = vals.map((v, i) => '<div><span>' + v + '</span><small>' + ["Days", "Hours", "Minutes", "Seconds"][i] + '</small></div>').join("");
+}
+tick();
+setInterval(tick, 1000);
 </script></body></html>
